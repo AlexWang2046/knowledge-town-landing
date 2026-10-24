@@ -1,0 +1,28 @@
+name: Rebuild Knowledge Town PPTX
+
+on:
+  push:
+    paths:
+      - 'docs/pptx_parts/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild PPTX from chunks
+        shell: bash
+        run: |
+          mkdir -p docs
+          find docs/pptx_parts -maxdepth 1 -type f -name 'part-*' -print | sort | xargs cat | base64 --decode > docs/KnowledgeTown_OPC_BP_15slides_latest.pptx
+      - name: Commit PPTX
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/KnowledgeTown_OPC_BP_15slides_latest.pptx
+          git commit -m "Add latest Knowledge Town OPC pitch deck" || exit 0
+          git push
