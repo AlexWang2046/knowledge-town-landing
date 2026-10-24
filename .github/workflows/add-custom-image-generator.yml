@@ -1,0 +1,105 @@
+name: Patch custom scene generator
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-custom-image-generator.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch workbench
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('workbench.html')
+          s = path.read_text(encoding='utf-8')
+
+          css = r'''
+.custom-generate-row{display:flex;gap:9px;align-items:center;margin-top:12px}.custom-generate-btn{border:0;border-radius:12px;background:#3f6252;color:#fff;padding:10px 15px;font-size:11px;font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(63,98,82,.16);white-space:nowrap}.custom-generate-btn:disabled{opacity:.55;cursor:wait}.custom-generate-note{font-size:9px;color:#899187;line-height:1.5}.custom-preview{display:none;margin-top:14px;border-radius:18px;overflow:hidden;border:1px solid #dce3d9;background:#fffdf8;box-shadow:0 10px 28px rgba(39,61,49,.08)}.custom-preview.show{display:block}.custom-preview-image{position:relative;aspect-ratio:16/9;background:linear-gradient(145deg,#e7ede2,#f1e7cb);display:grid;place-items:center;overflow:hidden}.custom-preview-image img{width:100%;height:100%;object-fit:cover;display:block}.custom-loading{position:absolute;inset:0;display:none;place-items:center;background:linear-gradient(135deg,#e8efe4,#f4eddb);color:#506b5a;font-size:11px;font-weight:900;z-index:2}.custom-loading.show{display:grid}.custom-loading:before{content:'✦';font-size:24px;margin-right:8px;animation:customPulse 1.1s ease-in-out infinite}@keyframes customPulse{50%{transform:scale(1.2);opacity:.55}}.custom-preview-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px}.custom-preview-copy strong{display:block;font-size:10px;color:#456151;margin-bottom:2px}.custom-preview-copy span{font-size:9px;color:#8a948a}.custom-preview-actions{display:flex;gap:7px}.custom-mini-btn{border:1px solid #d7dfd3;background:#fffdf8;color:#4c6655;border-radius:10px;padding:7px 9px;font-size:9px;font-weight:900;cursor:pointer}.custom-mini-btn.primary{background:#456754;color:#fff;border-color:#456754}@media(max-width:700px){.custom-generate-row{align-items:stretch;flex-direction:column}.custom-generate-btn{width:100%;min-height:42px}.custom-preview-foot{align-items:flex-start;flex-direction:column}.custom-preview-actions{width:100%}.custom-mini-btn{flex:1;text-align:center;padding:9px}}
+'''
+          if '.custom-generate-row{' not in s:
+              s = s.replace('</style>', css + '</style>', 1)
+
+          if 'id="customPrompt"' not in s:
+              start = s.index('<div class="custom-box">')
+              end = s.index('<div class="summary">', start)
+              new = '''<div class="custom-box"><label class="field" for="customPrompt">描述你想要的视觉风格</label><input class="input" id="customPrompt" placeholder="例如：国风书院、宣纸纹理、墨绿与金色"><div class="chips"><button type="button" class="chip custom-style-chip" data-prompt="国风书院，宣纸纹理，墨绿与金色，东方园林，安静学习空间">国风书院</button><button type="button" class="chip custom-style-chip" data-prompt="商务深绿，极简高级，现代企业培训空间，玻璃与木质材质">商务深绿</button><button type="button" class="chip custom-style-chip" data-prompt="儿童绘本，柔和明亮色彩，可爱学习小镇，温暖治愈">儿童绘本</button><button type="button" class="chip custom-style-chip" data-prompt="太空科幻，深蓝与银色，未来学习基地，沉浸式星际场景">太空科幻</button></div><div class="custom-generate-row"><button type="button" class="custom-generate-btn" id="generateSceneBtn">✦ 生成自定义场景</button><span class="custom-generate-note" id="customGenerateStatus">输入描述后生成一张课程世界预览图</span></div><div class="custom-preview" id="customPreview"><div class="custom-preview-image"><div class="custom-loading" id="customLoading">正在生成场景图</div><img id="customSceneImage" alt="AI 生成的自定义课程场景预览"></div><div class="custom-preview-foot"><div class="custom-preview-copy"><strong>AI 自定义场景预览</strong><span id="customPromptEcho">根据你的提示词生成</span></div><div class="custom-preview-actions"><button type="button" class="custom-mini-btn" id="regenerateSceneBtn">重新生成</button><button type="button" class="custom-mini-btn primary" id="useSceneBtn">确认使用</button></div></div></div></div>'''
+              s = s[:start] + new + s[end:]
+
+          if 'CUSTOM_SCENE_GENERATOR_V1' not in s:
+              js = r'''
+<script>
+// CUSTOM_SCENE_GENERATOR_V1
+(function(){
+  const promptInput=document.getElementById('customPrompt');
+  const generateBtn=document.getElementById('generateSceneBtn');
+  const regenBtn=document.getElementById('regenerateSceneBtn');
+  const useBtn=document.getElementById('useSceneBtn');
+  const preview=document.getElementById('customPreview');
+  const image=document.getElementById('customSceneImage');
+  const loading=document.getElementById('customLoading');
+  const status=document.getElementById('customGenerateStatus');
+  const echo=document.getElementById('customPromptEcho');
+  if(!promptInput||!generateBtn||!preview||!image)return;
+
+  document.querySelectorAll('.custom-style-chip').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      promptInput.value=chip.getAttribute('data-prompt')||chip.textContent.trim();
+      promptInput.focus();
+    });
+  });
+
+  function generateScene(){
+    const raw=promptInput.value.trim();
+    if(!raw){
+      status.textContent='请先输入你想要的视觉风格';
+      promptInput.focus();
+      return;
+    }
+    const full=raw+'，游戏化学习世界场景，教育产品主视觉，完整环境设计，精致高质量插画，适合课程地图与学习空间，画面中不要出现文字、字母、Logo、人物特写，16:9 横向构图';
+    const seed=Math.floor(Math.random()*900000)+100000;
+    const url='https://gen.pollinations.ai/image/'+encodeURIComponent(full)+'?model=black-forest-labs%2Fflux.1-schnell&width=1024&height=576&seed='+seed;
+    preview.classList.add('show');
+    loading.classList.add('show');
+    generateBtn.disabled=true;
+    status.textContent='AI 正在生成场景图…';
+    echo.textContent=raw;
+    image.removeAttribute('src');
+    image.onload=function(){loading.classList.remove('show');generateBtn.disabled=false;status.textContent='已生成，可以重新生成或确认使用';};
+    image.onerror=function(){loading.classList.remove('show');generateBtn.disabled=false;status.textContent='生成失败，请点击重新生成';};
+    setTimeout(function(){image.src=url;},80);
+  }
+
+  generateBtn.addEventListener('click',generateScene);
+  if(regenBtn)regenBtn.addEventListener('click',generateScene);
+  if(useBtn)useBtn.addEventListener('click',function(){
+    const customRadio=document.getElementById('tplCustom');
+    if(customRadio)customRadio.checked=true;
+    status.textContent='✓ 已使用这张自定义场景';
+    useBtn.textContent='✓ 已确认使用';
+  });
+})();
+</script>
+'''
+              s = s.replace('</body>', js + '</body>', 1)
+
+          path.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add workbench.html
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Add custom AI scene image generator"
+            git push
+          fi
